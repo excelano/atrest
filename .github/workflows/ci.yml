@@ -12,3 +12,7 @@ on:
 jobs:
   ci:
     uses: excelano/.github/.github/workflows/go-lib-ci.yml@main
+    # DPAPI sits behind a Windows build tag, and only a Windows runner
+    # executes it.
+    with:
+      platforms: '["ubuntu-latest", "windows-latest"]'
