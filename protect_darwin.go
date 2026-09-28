@@ -89,7 +89,12 @@ func findKeychainKey(service string) ([]byte, bool) {
 // came back, in findKeychainKey and in the read-back after create above.
 func runSecurity(command string) (string, error) {
 	cmd := exec.Command("/usr/bin/security", "-i")
-	cmd.Stdin = strings.NewReader(command + "\nquit\n")
+	// One command, then EOF: -i exits with that command's own status once
+	// stdin runs out. There is no "quit" command — sending one exits the
+	// session with an "unknown command" failure that would mask whatever the
+	// real command just did, which a build without a Mac to test against did
+	// not catch until this was run for real.
+	cmd.Stdin = strings.NewReader(command + "\n")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
