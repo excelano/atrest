@@ -43,9 +43,11 @@ func (dpapi) unprotect(name string, sealed []byte) ([]byte, error) {
 	return take(&out), nil
 }
 
+// blob points DPAPI at b. DPAPI rejects a null data pointer even at size
+// zero, so an empty slice points at a spare byte instead.
 func blob(b []byte) *windows.DataBlob {
 	if len(b) == 0 {
-		return &windows.DataBlob{}
+		return &windows.DataBlob{Data: new(byte)}
 	}
 	return &windows.DataBlob{Size: uint32(len(b)), Data: &b[0]}
 }
