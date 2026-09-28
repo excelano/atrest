@@ -12,7 +12,7 @@ on:
 jobs:
   ci:
     uses: excelano/.github/.github/workflows/go-lib-ci.yml@main
-    # DPAPI sits behind a Windows build tag, and only a Windows runner
-    # executes it.
+    # DPAPI and the Keychain each sit behind their own build tag, and only a
+    # runner of that OS executes the tag it owns.
     with:
-      platforms: '["ubuntu-latest", "windows-latest"]'
+      platforms: '["ubuntu-latest", "windows-latest", "macos-latest"]'

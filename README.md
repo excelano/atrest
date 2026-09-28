@@ -40,7 +40,11 @@ The envelope is JSON so that an older build of a program, one that hands the fil
 
 ## Platforms
 
-On Windows, `Seal` uses DPAPI, which encrypts under a key derived from the user's logon credentials, and passes the name as DPAPI's entropy. Elsewhere, `Available` reports false and `Seal` returns its input unchanged, so the caller's file stays plaintext and its protection is whatever file mode the caller gives it.
+On Windows, `Seal` uses DPAPI, which encrypts under a key derived from the user's logon credentials, and passes the name as DPAPI's entropy.
+
+On Linux and macOS, `Seal` encrypts with AES-256-GCM under a key it keeps in the platform's own secret store rather than beside the ciphertext: the user's D-Bus Secret Service on Linux, falling back to the kernel's per-user keyring when no session bus or no unlocked collection is reachable, and the login Keychain on macOS. A key that only lives in the kernel keyring does not survive a reboot, which costs one sign-in and nothing else, since the cache `Seal` protects is disposable.
+
+Where nothing is reachable — no D-Bus session and no usable keyring, a locked Keychain, a container whose seccomp profile blocks the kernel keyring call — `Seal` returns its input unchanged rather than failing, so the caller's file stays plaintext and its protection is whatever file mode the caller gives it. This can happen even though `Available` reports true, since availability is a property of the platform and reachability is a property of the moment.
 
 Sealing protects a file that leaves its context. It does not protect a file from other programs running as the same user, on any platform, because the operating system opens sealed data for any of them.
 

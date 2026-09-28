@@ -9,8 +9,11 @@
 // Seal wraps data in a JSON envelope naming the algorithm that protected it.
 // Open reverses Seal and also accepts plaintext, reporting which it was given,
 // so a caller that finds plaintext written by an older build can read it and
-// seal it again instead of discarding it. Where no facility exists, Seal
-// returns data unchanged and Available reports false.
+// seal it again instead of discarding it. Where no facility exists, and where
+// one exists but nothing on the machine can reach it right now, such as a
+// container with no D-Bus session and no usable kernel keyring, Seal returns
+// data unchanged; Available reports whether the platform has a facility at
+// all, not whether this call will succeed.
 //
 // The envelope is JSON so that an older build of a program which hands the
 // file to a JSON parser sees an object it does not recognise, rather than
@@ -36,6 +39,15 @@ import (
 // empty.
 var ErrCannotOpen = errors.New("atrest: sealed data cannot be opened here")
 
+// errUnavailable means no key store could be reached to seal or unseal with
+// right now: no session bus and no usable kernel keyring on Linux, no
+// Keychain reachable on macOS. Seal and Open both treat it as "nothing to
+// seal with here," the same as platform being nil, rather than as a failure,
+// so a cache still reads and writes without becoming unreadable or refusing
+// to save. A platform that has no notion of transient unavailability, such as
+// Windows' DPAPI, never returns it.
+var errUnavailable = errors.New("atrest: no key store reachable")
+
 // envelopeVersion is written into every envelope. A reader refuses any other
 // value, so a format change must bump it.
 const envelopeVersion = 1
@@ -59,8 +71,11 @@ type protector interface {
 	unprotect(name string, sealed []byte) ([]byte, error)
 }
 
-// Available reports whether Seal protects data on this platform. When false,
-// Seal returns its input unchanged.
+// Available reports whether this platform has a sealing facility at all. It
+// is true on Linux and macOS even where nothing is reachable at the moment
+// — no D-Bus session, no usable kernel keyring, no Keychain — since that can
+// change between one call and the next; Seal itself is what falls back to
+// plaintext on a call it cannot seal.
 func Available() bool {
 	return platform != nil
 }
@@ -74,6 +89,9 @@ func Seal(name string, data []byte) ([]byte, error) {
 		return data, nil
 	}
 	sealed, err := platform.protect(name, data)
+	if errors.Is(err, errUnavailable) {
+		return data, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("atrest: sealing: %w", err)
 	}

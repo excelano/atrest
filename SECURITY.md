@@ -12,8 +12,8 @@ The latest release receives security fixes. Older versions are not supported.
 
 ## What atrest can access
 
-atrest is a library, not a service. `Seal` and `Open` transform a byte slice the caller passes in, calling the operating system's data-protection API where there is one (DPAPI's `CryptProtectData` and `CryptUnprotectData` on Windows, with prompting forbidden). It reads and writes no files, makes no network calls and runs no subprocesses. Storing what `Seal` returns is the caller's job.
+atrest is a library, not a service. `Seal` and `Open` transform a byte slice the caller passes in, calling on the operating system to do it: DPAPI's `CryptProtectData` and `CryptUnprotectData` on Windows, with prompting forbidden; on Linux, the user's own D-Bus session bus to reach the Secret Service, or the kernel keyring syscalls where that is unreachable; on macOS, the `/usr/bin/security` command line to reach the login Keychain. Every one of these stays on the local machine and under the calling user's own account; none of them is a network call in the sense of leaving the host. It reads and writes no files of its own — storing what `Seal` returns is the caller's job — and starts no process except `/usr/bin/security` on macOS.
 
 ## What atrest stores
 
-Nothing. It holds no key of its own: the key belongs to the operating system and never passes through atrest. No telemetry, no analytics, no remote logging.
+Nothing outside the platform's own secret store. On Windows, DPAPI derives its key from the user's logon credentials, and no key of atrest's own making is ever involved. On Linux and macOS, atrest generates a random key the first time `Seal` is called for a given name and hands it to the platform's secret store to hold; from then on it is read back from there, never written to a file, and never logged. No telemetry, no analytics, no remote logging.

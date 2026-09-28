@@ -1,7 +1,7 @@
 // Author: David M. Anderson
 // Built with AI assistance (Claude, Anthropic)
 
-//go:build !windows
+//go:build !windows && !linux && !darwin
 
 package atrest
 
