@@ -20,17 +20,11 @@ import (
 // Diffie-Hellman one: the bus is a Unix socket only the calling user can
 // connect to, so encrypting a hop that never leaves the kernel buys nothing.
 func secretServiceKey(name string) ([]byte, error) {
-	conn, err := dbus.SessionBusPrivate()
+	conn, err := sessionBus()
 	if err != nil {
 		return nil, errUnavailable
 	}
 	defer conn.Close()
-	if err := conn.Auth(nil); err != nil {
-		return nil, errUnavailable
-	}
-	if err := conn.Hello(); err != nil {
-		return nil, errUnavailable
-	}
 
 	service := conn.Object("org.freedesktop.secrets", "/org/freedesktop/secrets")
 	var output dbus.Variant
@@ -75,6 +69,36 @@ func secretServiceKey(name string) ([]byte, error) {
 		return nil, errUnavailable
 	}
 	return key, nil
+}
+
+// secretServiceUnlocked reports whether the default collection exists and is
+// unlocked, which is when secretServiceKey can return a key instead of
+// errUnavailable. It reads the collection's Locked property and creates
+// nothing.
+func secretServiceUnlocked() bool {
+	conn, err := sessionBus()
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+	locked, err := conn.Object("org.freedesktop.secrets", defaultCollectionPath).GetProperty(secretCollectionIface + ".Locked")
+	return err == nil && locked.Value() == false
+}
+
+func sessionBus() (*dbus.Conn, error) {
+	conn, err := dbus.SessionBusPrivate()
+	if err != nil {
+		return nil, err
+	}
+	if err := conn.Auth(nil); err != nil {
+		conn.Close()
+		return nil, err
+	}
+	if err := conn.Hello(); err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return conn, nil
 }
 
 const (

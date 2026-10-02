@@ -21,6 +21,12 @@ import (
 // third store weaker than either of these two.
 var platform protector = keyedAESGCM{getOrCreateKey: linuxKey}
 
+// persistent is true only when the Secret Service is reachable and unlocked.
+// The kernel keyring's key is gone after a reboot, and a Secret Service whose
+// collection is locked, as on a machine that logs in without a password for
+// PAM to unlock the keyring with, falls through to it.
+func persistent() bool { return secretServiceUnlocked() }
+
 func linuxKey(name string) ([]byte, error) {
 	if key, err := secretServiceKey(name); err == nil {
 		return key, nil

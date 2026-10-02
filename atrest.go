@@ -80,6 +80,16 @@ func Available() bool {
 	return platform != nil
 }
 
+// Persistent reports whether what Seal produces right now would still open
+// after a reboot. It is false on Linux when only the kernel keyring is
+// reachable, because that key does not survive one, and where the platform has
+// no facility. A caller whose cache is worth more than the protection, such as
+// a refresh token that costs an interactive sign-in to replace, can store it
+// unsealed while this is false rather than lose it at every boot.
+func Persistent() bool {
+	return persistent()
+}
+
 // Seal protects data under name and returns the envelope to store. name must
 // be the same at every Open of the result, and should be specific to the
 // program and the file, since it keeps one program's sealed data from opening

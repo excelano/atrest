@@ -30,6 +30,14 @@ case !sealed && atrest.Available():
 }
 ```
 
+```go
+if atrest.Persistent() {
+    stored, err = atrest.Seal("myapp/token", cache)
+} else {
+    stored = cache
+}
+```
+
 The name passed to `Seal` has to be passed again to `Open`, and data sealed under one name does not open under another. Make it specific to the program and the file, and never change it: a new name makes every existing file unreadable.
 
 ## The envelope
@@ -42,7 +50,7 @@ The envelope is JSON so that an older build of a program, one that hands the fil
 
 On Windows, `Seal` uses DPAPI, which encrypts under a key derived from the user's logon credentials, and passes the name as DPAPI's entropy.
 
-On Linux and macOS, `Seal` encrypts with AES-256-GCM under a key it keeps in the platform's own secret store rather than beside the ciphertext: the user's D-Bus Secret Service on Linux, falling back to the kernel's per-user keyring when no session bus or no unlocked collection is reachable, and the login Keychain on macOS. A key that only lives in the kernel keyring does not survive a reboot, which costs one sign-in and nothing else, since the cache `Seal` protects is disposable.
+On Linux and macOS, `Seal` encrypts with AES-256-GCM under a key it keeps in the platform's own secret store rather than beside the ciphertext: the user's D-Bus Secret Service on Linux, falling back to the kernel's per-user keyring when no session bus or no unlocked collection is reachable, and the login Keychain on macOS. A key that only lives in the kernel keyring does not survive a reboot, and a Secret Service whose collection is locked, as on a machine that logs in without a password to unlock it, falls through to that keyring. `Persistent` reports whether `Seal` would currently key under a store that survives a reboot. A caller whose file is costly to lose, such as a refresh token that takes an interactive sign-in to replace, can store it unsealed while `Persistent` is false instead of losing it at every boot.
 
 Where nothing is reachable — no D-Bus session and no usable keyring, a locked Keychain, a container whose seccomp profile blocks the kernel keyring call — `Seal` returns its input unchanged rather than failing, so the caller's file stays plaintext and its protection is whatever file mode the caller gives it. This can happen even though `Available` reports true, since availability is a property of the platform and reachability is a property of the moment.
 

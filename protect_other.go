@@ -8,3 +8,5 @@ package atrest
 // platform is nil where atrest has no facility yet, and Seal passes data
 // through unchanged.
 var platform protector
+
+func persistent() bool { return false }

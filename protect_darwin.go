@@ -19,6 +19,11 @@ import (
 // keeps in the user's login Keychain.
 var platform protector = keyedAESGCM{getOrCreateKey: keychainKey}
 
+// persistent is true because the login Keychain outlives a reboot. A Keychain
+// that cannot be reached makes Seal return its input unchanged, which also
+// outlives one.
+func persistent() bool { return true }
+
 // keychainAccount is the Keychain item's account field for every key this
 // package stores. One constant works because items are told apart by
 // service, not by account, and the account field carries nothing this design

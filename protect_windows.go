@@ -17,6 +17,9 @@ import (
 // machine, or wherever that user's roaming profile carries the key.
 var platform protector = dpapi{}
 
+// persistent is true because DPAPI's key follows the user's logon credentials.
+func persistent() bool { return true }
+
 type dpapi struct{}
 
 func (dpapi) alg() string { return "dpapi" }

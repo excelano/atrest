@@ -30,6 +30,13 @@ func TestSecretServiceKeyRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPersistentFollowsSecretService(t *testing.T) {
+	_, err := secretServiceKey("atrest-test/persistent")
+	if got, want := Persistent(), err == nil; got != want {
+		t.Errorf("Persistent() = %v, but secretServiceKey error = %v", got, err)
+	}
+}
+
 func TestKeyringKeyRoundTrip(t *testing.T) {
 	key1, err := keyringKey("atrest-test/keyring")
 	if err != nil {
