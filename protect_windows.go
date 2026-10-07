@@ -7,6 +7,8 @@ package atrest
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -20,23 +22,30 @@ var platform protector = dpapi{}
 // persistent is true because DPAPI's key follows the user's logon credentials.
 func persistent() bool { return true }
 
+// unlock has nothing to do: DPAPI's key is the user's logon, which is never
+// locked while the user is logged on.
+func unlock(context.Context) error {
+	return errors.New("atrest: DPAPI has no store to unlock")
+}
+
 type dpapi struct{}
 
 func (dpapi) alg() string { return "dpapi" }
 
 // protect passes name as DPAPI's optional entropy, which must be presented
-// again to unprotect. UI_FORBIDDEN makes DPAPI fail rather than prompt.
-func (dpapi) protect(name string, plain []byte) ([]byte, error) {
+// again to unprotect. UI_FORBIDDEN makes DPAPI fail rather than prompt. DPAPI
+// is the only store, so the envelope names none.
+func (dpapi) protect(name string, plain []byte) ([]byte, string, error) {
 	var out windows.DataBlob
 	err := windows.CryptProtectData(blob(plain), nil, blob([]byte(name)), 0, nil,
 		windows.CRYPTPROTECT_UI_FORBIDDEN, &out)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return take(&out), nil
+	return take(&out), "", nil
 }
 
-func (dpapi) unprotect(name string, sealed []byte) ([]byte, error) {
+func (dpapi) unprotect(name, _ string, sealed []byte) ([]byte, error) {
 	var out windows.DataBlob
 	err := windows.CryptUnprotectData(blob(sealed), nil, blob([]byte(name)), 0, nil,
 		windows.CRYPTPROTECT_UI_FORBIDDEN, &out)

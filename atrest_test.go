@@ -18,11 +18,11 @@ type fakeProtector struct{}
 
 func (fakeProtector) alg() string { return "fake" }
 
-func (fakeProtector) protect(name string, plain []byte) ([]byte, error) {
-	return append([]byte(name+"\x00"), plain...), nil
+func (fakeProtector) protect(name string, plain []byte) ([]byte, string, error) {
+	return append([]byte(name+"\x00"), plain...), "", nil
 }
 
-func (fakeProtector) unprotect(name string, sealed []byte) ([]byte, error) {
+func (fakeProtector) unprotect(name, _ string, sealed []byte) ([]byte, error) {
 	rest, ok := bytes.CutPrefix(sealed, []byte(name+"\x00"))
 	if !ok {
 		return nil, errors.New("wrong name")
@@ -67,8 +67,8 @@ func TestSealWritesOnlyEnvelopeFields(t *testing.T) {
 	if err := json.Unmarshal(stored, &fields); err != nil {
 		t.Fatalf("envelope is not a JSON object: %v", err)
 	}
-	if !onlyEnvelopeKeys(fields) || len(fields) != len(envelopeKeys) {
-		t.Errorf("envelope fields = %s; want exactly %v", stored, envelopeKeys)
+	if !onlyEnvelopeKeys(fields) || len(fields) != len(envelopeKeys)-1 {
+		t.Errorf("envelope fields = %s; want %v less the store a single-facility platform leaves out", stored, envelopeKeys)
 	}
 }
 
@@ -92,7 +92,7 @@ func TestOpenPlaintext(t *testing.T) {
 // cache is the live data; the envelope fields are stale and must go.
 func TestOpenStripsEnvelopeFieldsWrittenBackByOlderBuild(t *testing.T) {
 	withPlatform(t, fakeProtector{})
-	stored := `{"AccessToken":{},"Account":{},"atrest":1,"alg":"fake","data":"c3RhbGU="}`
+	stored := `{"AccessToken":{},"Account":{},"atrest":1,"alg":"fake","data":"c3RhbGU=","store":"old"}`
 	plain, sealed, err := Open("test.cache", []byte(stored))
 	if err != nil {
 		t.Fatalf("Open: %v", err)

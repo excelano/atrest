@@ -7,22 +7,30 @@ package atrest
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
 )
 
-// platform on macOS is AES-256-GCM, keyed by a generic password this call
-// keeps in the user's login Keychain.
-var platform protector = keyedAESGCM{getOrCreateKey: keychainKey}
+// platform on macOS is AES-256-GCM, keyed by a generic password kept in the
+// user's login Keychain.
+var platform protector = keyedAESGCM{stores: []keyStore{keychainStore{}}}
 
 // persistent is true because the login Keychain outlives a reboot. A Keychain
 // that cannot be reached makes Seal return its input unchanged, which also
 // outlives one.
 func persistent() bool { return true }
+
+// unlock has nothing to do: the Keychain prompts for itself when it is locked,
+// through security(1), and a Keychain that stays locked reads as unreachable.
+func unlock(context.Context) error {
+	return errors.New("atrest: the Keychain is unlocked by macOS, not by atrest")
+}
 
 // keychainAccount is the Keychain item's account field for every key this
 // package stores. One constant works because items are told apart by
@@ -30,9 +38,9 @@ func persistent() bool { return true }
 // needs.
 const keychainAccount = "atrest"
 
-// keychainKey fetches or creates name's key as a generic password in the
-// user's login Keychain, through the security(1) command line rather than
-// linking a Keychain binding directly into every consumer's binary.
+// keychainStore keeps name's key as a generic password in the user's login
+// Keychain, through the security(1) command line rather than linking a
+// Keychain binding directly into every consumer's binary.
 //
 // The reason is the access control list a Keychain item carries: it names
 // the process that created it, and lets that process read it back without a
@@ -47,10 +55,17 @@ const keychainAccount = "atrest"
 // interactive-mode command parser is not one this code has been able to
 // exercise against a real build, and a name callers can put arbitrary bytes
 // into should never reach it unescaped.
-func keychainKey(name string) ([]byte, error) {
+type keychainStore struct{}
+
+func (keychainStore) id() string { return "keychain" }
+
+func (keychainStore) key(name string, create bool) ([]byte, error) {
 	service := "atrest-" + hex.EncodeToString(sha256Sum(name))
 	if key, ok := findKeychainKey(service); ok {
 		return key, nil
+	}
+	if !create {
+		return nil, errNoKey
 	}
 	key, err := randomKey()
 	if err != nil {

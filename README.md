@@ -21,6 +21,8 @@ if err != nil { /* ... */ }
 
 plain, sealed, err := atrest.Open("myapp/token", stored)
 switch {
+case errors.Is(err, atrest.ErrLocked):
+    // the key store is locked: offer atrest.Unlock(ctx), then Open again
 case errors.Is(err, atrest.ErrCannotOpen):
     // sealed by another user or machine: treat the file as absent
 case err != nil:
@@ -42,7 +44,7 @@ The name passed to `Seal` has to be passed again to `Open`, and data sealed unde
 
 ## The envelope
 
-`Seal` returns a JSON object naming the envelope version and the algorithm that sealed the data. `Open` accepts either that envelope or plaintext and reports which it was given, so a program can migrate its existing files on first read instead of discarding them.
+`Seal` returns a JSON object naming the envelope version, the algorithm that sealed the data and, on a platform with more than one key store, the store holding the key, so that `Open` asks that store rather than whichever one happens to be reachable. `Open` accepts either that envelope or plaintext and reports which it was given, so a program can migrate its existing files on first read instead of discarding them.
 
 The envelope is JSON so that an older build of a program, one that hands the file straight to a JSON parser, sees an object it does not recognise rather than bytes it cannot parse. A parser that tolerates unknown fields reads the envelope as an empty document and carries on, and if that older build then saves its own data back around the envelope's fields, `Open` recognises the mixture as plaintext and removes the stale fields. Mixed old and new builds sharing a file therefore cost a fresh start in the old build, not a failure.
 
@@ -51,6 +53,8 @@ The envelope is JSON so that an older build of a program, one that hands the fil
 On Windows, `Seal` uses DPAPI, which encrypts under a key derived from the user's logon credentials, and passes the name as DPAPI's entropy.
 
 On Linux and macOS, `Seal` encrypts with AES-256-GCM under a key it keeps in the platform's own secret store rather than beside the ciphertext: the user's D-Bus Secret Service on Linux, falling back to the kernel's per-user keyring when no session bus or no unlocked collection is reachable, and the login Keychain on macOS. A key that only lives in the kernel keyring does not survive a reboot, and a Secret Service whose collection is locked, as on a machine that logs in without a password to unlock it, falls through to that keyring. `Persistent` reports whether `Seal` would currently key under a store that survives a reboot. A caller whose file is costly to lose, such as a refresh token that takes an interactive sign-in to replace, can store it unsealed while `Persistent` is false instead of losing it at every boot.
+
+A file sealed under the Secret Service opens only while its collection is unlocked. When it is locked again, as after a reboot on a machine whose session does not unlock it, `Open` reports `ErrLocked`, which is also an `ErrCannotOpen`, and `Unlock` asks the Secret Service to show its own prompt for the keyring's password, so a caller can offer the user that instead of discarding the file. The prompt is a window on the user's display; a process without one, such as an SSH session, is told so and the file stays closed.
 
 Where nothing is reachable — no D-Bus session and no usable keyring, a locked Keychain, a container whose seccomp profile blocks the kernel keyring call — `Seal` returns its input unchanged rather than failing, so the caller's file stays plaintext and its protection is whatever file mode the caller gives it. This can happen even though `Available` reports true, since availability is a property of the platform and reachability is a property of the moment.
 

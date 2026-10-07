@@ -14,16 +14,16 @@ import "testing"
 // property of the runner, not a defect atrest could have.
 
 func TestKeychainKeyRoundTrip(t *testing.T) {
-	key1, err := keychainKey("atrest-test/keychain")
+	key1, err := keychainStore{}.key("atrest-test/keychain", true)
 	if err != nil {
 		t.Skipf("no Keychain reachable here: %v", err)
 	}
-	key2, err := keychainKey("atrest-test/keychain")
+	key2, err := keychainStore{}.key("atrest-test/keychain", true)
 	if err != nil {
 		t.Fatalf("second call: %v", err)
 	}
 	if string(key1) != string(key2) {
-		t.Error("keychainKey returned a different key on the second call")
+		t.Error("the Keychain returned a different key on the second call")
 	}
 	if len(key1) != 32 {
 		t.Errorf("key length = %d, want 32", len(key1))

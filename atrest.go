@@ -26,6 +26,7 @@
 package atrest
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -39,6 +40,22 @@ import (
 // empty.
 var ErrCannotOpen = errors.New("atrest: sealed data cannot be opened here")
 
+// ErrLocked is an ErrCannotOpen whose cause is the key store that holds the
+// data's key being locked, or unreachable from this process, rather than the
+// key being absent. The data opens once the store does, which Unlock can ask
+// for, so a caller that would otherwise discard the data and start over can
+// offer that first. errors.Is reports both ErrLocked and ErrCannotOpen for it.
+var ErrLocked = errors.New("atrest: the key store is locked")
+
+// lockedError names the store so the caller can say which one to unlock.
+type lockedError struct{ store string }
+
+func (e lockedError) Error() string {
+	return "its key store, " + e.store + ", is locked or unreachable"
+}
+
+func (lockedError) Is(target error) bool { return target == ErrLocked }
+
 // errUnavailable means no key store could be reached to seal or unseal with
 // right now: no session bus and no usable kernel keyring on Linux, no
 // Keychain reachable on macOS. Seal and Open both treat it as "nothing to
@@ -48,27 +65,38 @@ var ErrCannotOpen = errors.New("atrest: sealed data cannot be opened here")
 // Windows' DPAPI, never returns it.
 var errUnavailable = errors.New("atrest: no key store reachable")
 
+// errNoKey is a key store that is reachable but holds no key under the name
+// asked for: the data was sealed elsewhere, or the key did not survive.
+var errNoKey = errors.New("atrest: no key under this name")
+
 // envelopeVersion is written into every envelope. A reader refuses any other
 // value, so a format change must bump it.
 const envelopeVersion = 1
 
 // envelope is the stored form of sealed data. Data is base64 in the JSON.
+// Store names which of the platform's key stores holds the key, on a platform
+// with more than one, so Open asks that store rather than whichever one is
+// reachable at the time.
 type envelope struct {
 	Version int    `json:"atrest"`
 	Alg     string `json:"alg"`
 	Data    []byte `json:"data"`
+	Store   string `json:"store,omitempty"`
 }
 
 // envelopeKeys are the envelope's JSON field names.
-var envelopeKeys = []string{"atrest", "alg", "data"}
+var envelopeKeys = []string{"atrest", "alg", "data", "store"}
 
 // protector is a platform's data-protection facility. name is the caller's
 // label for the data, bound into the protection where the facility allows,
-// so data sealed under one name does not open under another.
+// so data sealed under one name does not open under another. protect also
+// reports which key store it used, empty where the platform has only one
+// facility; unprotect is given that store back, or an empty string for an
+// envelope written before stores were recorded.
 type protector interface {
 	alg() string
-	protect(name string, plain []byte) ([]byte, error)
-	unprotect(name string, sealed []byte) ([]byte, error)
+	protect(name string, plain []byte) (sealed []byte, store string, err error)
+	unprotect(name, store string, sealed []byte) ([]byte, error)
 }
 
 // Available reports whether this platform has a sealing facility at all. It
@@ -90,6 +118,15 @@ func Persistent() bool {
 	return persistent()
 }
 
+// Unlock asks the platform to unlock the key store behind an ErrLocked through
+// the desktop's own prompt, on Linux the Secret Service's dialog for the login
+// keyring. It returns nil once the store is unlocked, and an error when it
+// stays locked: the prompt was dismissed, ctx ended first, this process has no
+// display to show a prompt on, or the platform has nothing to unlock.
+func Unlock(ctx context.Context) error {
+	return unlock(ctx)
+}
+
 // Seal protects data under name and returns the envelope to store. name must
 // be the same at every Open of the result, and should be specific to the
 // program and the file, since it keeps one program's sealed data from opening
@@ -98,14 +135,14 @@ func Seal(name string, data []byte) ([]byte, error) {
 	if platform == nil {
 		return data, nil
 	}
-	sealed, err := platform.protect(name, data)
+	sealed, store, err := platform.protect(name, data)
 	if errors.Is(err, errUnavailable) {
 		return data, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("atrest: sealing: %w", err)
 	}
-	return json.Marshal(envelope{Version: envelopeVersion, Alg: platform.alg(), Data: sealed})
+	return json.Marshal(envelope{Version: envelopeVersion, Alg: platform.alg(), Data: sealed, Store: store})
 }
 
 // Open returns the plaintext of data and whether data was sealed. Data that
@@ -118,7 +155,7 @@ func Seal(name string, data []byte) ([]byte, error) {
 // Those fields are removed before the plaintext is returned.
 //
 // An envelope that cannot be opened here returns an error wrapping
-// ErrCannotOpen.
+// ErrCannotOpen, and also ErrLocked when unlocking its key store would open it.
 func Open(name string, data []byte) (plain []byte, sealed bool, err error) {
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(data, &fields) != nil {
@@ -148,9 +185,9 @@ func Open(name string, data []byte) (plain []byte, sealed bool, err error) {
 	if platform == nil || env.Alg != platform.alg() {
 		return nil, false, fmt.Errorf("%w: algorithm %q unavailable", ErrCannotOpen, env.Alg)
 	}
-	plain, err = platform.unprotect(name, env.Data)
+	plain, err = platform.unprotect(name, env.Store, env.Data)
 	if err != nil {
-		return nil, false, fmt.Errorf("%w: %v", ErrCannotOpen, err)
+		return nil, false, fmt.Errorf("%w: %w", ErrCannotOpen, err)
 	}
 	return plain, true, nil
 }
