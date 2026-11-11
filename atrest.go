@@ -16,8 +16,8 @@
 // all, not whether this call will succeed.
 //
 // The envelope is JSON so that an older build of a program which hands the
-// file to a JSON parser sees an object it does not recognise, rather than
-// bytes it cannot parse. MSAL's token cache, for one, reads an unrecognised
+// file to a JSON parser sees an object it does not recognize, rather than
+// bytes it cannot parse. MSAL's token cache, for one, reads an unrecognized
 // object as an empty cache and prompts for sign-in, where unparseable bytes
 // fail every call.
 //

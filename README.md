@@ -46,7 +46,7 @@ The name passed to `Seal` has to be passed again to `Open`, and data sealed unde
 
 `Seal` returns a JSON object naming the envelope version, the algorithm that sealed the data and, on a platform with more than one key store, the store holding the key, so that `Open` asks that store rather than whichever one happens to be reachable. `Open` accepts either that envelope or plaintext and reports which it was given, so a program can migrate its existing files on first read instead of discarding them.
 
-The envelope is JSON so that an older build of a program, one that hands the file straight to a JSON parser, sees an object it does not recognise rather than bytes it cannot parse. A parser that tolerates unknown fields reads the envelope as an empty document and carries on, and if that older build then saves its own data back around the envelope's fields, `Open` recognises the mixture as plaintext and removes the stale fields. Mixed old and new builds sharing a file therefore cost a fresh start in the old build, not a failure.
+The envelope is JSON so that an older build of a program, one that hands the file straight to a JSON parser, sees an object it does not recognize rather than bytes it cannot parse. A parser that tolerates unknown fields reads the envelope as an empty document and carries on, and if that older build then saves its own data back around the envelope's fields, `Open` recognizes the mixture as plaintext and removes the stale fields. Mixed old and new builds sharing a file therefore cost a fresh start in the old build, not a failure.
 
 ## Platforms
 
@@ -62,4 +62,4 @@ Sealing protects a file that leaves its context. It does not protect a file from
 
 ## License
 
-MIT.
+MIT. See [LICENSE](LICENSE).
